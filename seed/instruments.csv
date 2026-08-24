@@ -1,0 +1,10 @@
+symbol,name,asset_class,currency,tradable,current_price
+INFY.NS,Infosys Limited,EQUITY,INR,true,1585.50
+RELIANCE.NS,Reliance Industries Limited,EQUITY,INR,true,1425.00
+TATASTEEL.BO,Tata Steel Limited,EQUITY,INR,true,164.20
+HDFCBANK.NS,HDFC Bank Limited,EQUITY,INR,true,1672.00
+AAPL,Apple Inc,EQUITY,USD,true,232.50
+SPY,SPDR S&P 500 ETF Trust,ETF,USD,true,548.00
+FX:EURUSD,Euro against United States Dollar,FX,USD,true,1.17
+X:BTC-USD,Bitcoin against United States Dollar,CRYPTO,USD,true,61000.00
+SATYAM.BO,Satyam Computer Services Limited,EQUITY,INR,false,21.50
