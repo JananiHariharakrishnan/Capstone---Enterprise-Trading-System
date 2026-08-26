@@ -76,3 +76,26 @@ def test_compare_securities(sample_data):
         "RELIANCE.NS",
         "TATASTEEL.BO",
     }
+    
+def test_create_market_dashboard(tmp_path, sample_data):
+    from analytics_etl.charts import create_market_dashboard
+
+    metrics = compare_securities(
+        {
+            "INFY.NS": sample_data,
+            "RELIANCE.NS": sample_data.assign(
+                symbol="RELIANCE.NS"
+            ),
+            "TATASTEEL.BO": sample_data.assign(
+                symbol="TATASTEEL.BO"
+            ),
+        }
+    )
+
+    output = tmp_path / "dashboard.html"
+
+    create_market_dashboard(metrics, str(output))
+
+    assert output.exists()
+    assert output.stat().st_size > 0
+

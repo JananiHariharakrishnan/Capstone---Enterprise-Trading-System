@@ -5,14 +5,17 @@ Temprory code until the extract , load and transform file is done
 import pandas as pd
 
 from analytics_etl.analysis import compare_securities
-from analytics_etl.charts import (
-    create_performance_chart,
-    create_volatility_chart,
-    create_drawdown_chart,
-)
+from analytics_etl.charts import create_market_dashboard
+
 
 
 def create_sample_data(symbol):
+    prices = {
+        "INFY.NS": [100, 103, 101, 106, 104, 112],
+        "RELIANCE.NS": [100, 102, 104, 103, 107, 109],
+        "TATASTEEL.BO": [100, 106, 99, 104, 97, 103],
+    }
+
     return pd.DataFrame(
         {
             "symbol": [symbol] * 6,
@@ -26,14 +29,7 @@ def create_sample_data(symbol):
                     "2026-07-08",
                 ]
             ),
-            "close": [
-                100,
-                103,
-                101,
-                106,
-                104,
-                108,
-            ],
+            "close": prices[symbol],
         }
     )
 
@@ -59,20 +55,12 @@ def main():
     print(metrics.to_string(index=False))
 
     # Create charts.
-    create_performance_chart(
-        metrics,
-        "artefacts/performance.html",
-    )
+    create_market_dashboard(
+    metrics,
+    "artefacts/market_dashboard.html",
+)
 
-    create_volatility_chart(
-        metrics,
-        "artefacts/volatility.html",
-    )
 
-    create_drawdown_chart(
-        metrics,
-        "artefacts/drawdown.html",
-    )
 
     print("\nCharts created in artefacts/")
 
