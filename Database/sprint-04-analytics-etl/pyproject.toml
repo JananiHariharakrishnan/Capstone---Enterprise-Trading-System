@@ -22,6 +22,7 @@ dev = [
 
 [project.scripts]
 analytics-etl = "analytics_etl.cli:main"
+analytics-dashboard = "analytics_etl.charts:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

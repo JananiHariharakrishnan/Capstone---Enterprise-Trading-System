@@ -137,6 +137,11 @@ that fetches, cleans and writes can only be tested by running the whole thing
 against the live API, and it gives you no way to ask which third of it was
 wrong.
 
+Run the ETL pipeline from this folder with `python -m analytics_etl`. After the
+data is loaded, create the dashboard from DuckDB with `python -m
+analytics_etl.charts`. The dashboard is written to
+`artefacts/market_dashboard.html`.
+
 Cache raw pulls to disk. One symbol over one date range is one request against
 a quota of 2000 per day, and a team debugging a chart runs the pipeline twenty
 times before lunch. Write the raw response to `.cache/`, keyed by symbol and

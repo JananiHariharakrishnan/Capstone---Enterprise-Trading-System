@@ -1,24 +1,36 @@
-# analytics_etl/load.py
-
 from pathlib import Path
 
 import duckdb
+import pandas as pd
 
 
 DATABASE_PATH = Path("analytics.duckdb")
+COLUMNS = [
+    "symbol",
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "synthetic",
+    "daily_change",
+    "daily_change_pct",
+]
 
 
-def load(data):
-    """
-    Write transformed candle data to DuckDB.
+def load(data: pd.DataFrame, database_path: Path = DATABASE_PATH) -> int:
+    """Store a cleaned candle DataFrame in DuckDB and return row count."""
+    if not isinstance(data, pd.DataFrame):
+        raise TypeError("data must be a pandas DataFrame")
 
-    This is the only ETL step that writes to the analytical store.
-    """
+    missing_columns = set(COLUMNS) - set(data.columns)
+    if missing_columns:
+        raise ValueError(f"Missing columns: {sorted(missing_columns)}")
 
-    con = duckdb.connect(str(DATABASE_PATH))
-
+    connection = duckdb.connect(str(database_path))
     try:
-        con.execute(
+        connection.execute(
             """
             CREATE TABLE IF NOT EXISTS market_candles (
                 symbol VARCHAR,
@@ -36,41 +48,16 @@ def load(data):
             """
         )
 
-        if not data:
-            return
+        if data.empty:
+            return 0
 
-        con.executemany(
+        connection.register("cleaned_candles", data[COLUMNS])
+        connection.execute(
             """
-            INSERT OR REPLACE INTO market_candles (
-                symbol,
-                date,
-                open,
-                high,
-                low,
-                close,
-                volume,
-                synthetic,
-                daily_change,
-                daily_change_pct
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    row["symbol"],
-                    row["date"],
-                    row["open"],
-                    row["high"],
-                    row["low"],
-                    row["close"],
-                    row["volume"],
-                    row["synthetic"],
-                    row["daily_change"],
-                    row["daily_change_pct"],
-                )
-                for row in data
-            ],
+            INSERT OR REPLACE INTO market_candles
+            SELECT * FROM cleaned_candles
+            """
         )
-
+        return len(data)
     finally:
-        con.close()
+        connection.close()

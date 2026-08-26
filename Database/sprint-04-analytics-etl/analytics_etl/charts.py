@@ -1,8 +1,11 @@
 from pathlib import Path
 
+import duckdb
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
+from .analysis import compare_securities
 
 
 COMPANY_CONFIG = {
@@ -31,6 +34,8 @@ COLORS = {
     "accent": "#2563EB",
 }
 
+DATABASE_PATH = Path("analytics.duckdb")
+
 
 def company_name(symbol: str) -> str:
     """Return a human-readable company name."""
@@ -46,6 +51,34 @@ def company_color(symbol: str) -> str:
         symbol,
         {"color": COLORS["accent"]},
     )["color"]
+
+
+def create_dashboard_from_database(
+    database_path: Path = DATABASE_PATH,
+    output_file: str = "artefacts/market_dashboard.html",
+) -> None:
+    """Read candles from DuckDB, calculate metrics, and write the dashboard."""
+    connection = duckdb.connect(str(database_path), read_only=True)
+    try:
+        candles = connection.execute(
+            """
+            SELECT symbol, date, close
+            FROM market_candles
+            ORDER BY symbol, date
+            """
+        ).df()
+    finally:
+        connection.close()
+
+    if candles.empty:
+        raise ValueError("Cannot create dashboard from an empty market_candles table.")
+
+    securities = {
+        symbol: frame.reset_index(drop=True)
+        for symbol, frame in candles.groupby("symbol")
+    }
+    metrics = compare_securities(securities)
+    create_market_dashboard(metrics, output_file)
 
 
 def _base_layout(fig: go.Figure) -> None:
@@ -731,3 +764,13 @@ def create_market_dashboard(
         dashboard,
         encoding="utf-8",
     )
+
+
+def main() -> None:
+    """Generate the dashboard from the default DuckDB database."""
+    create_dashboard_from_database()
+    print("Dashboard written to artefacts/market_dashboard.html")
+
+
+if __name__ == "__main__":
+    main()

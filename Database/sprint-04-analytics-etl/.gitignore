@@ -10,3 +10,5 @@
 
 # Editable install metadata.
 *.egg-info/
+
+*.env

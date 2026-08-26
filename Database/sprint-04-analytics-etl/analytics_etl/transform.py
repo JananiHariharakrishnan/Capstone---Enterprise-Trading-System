@@ -1,187 +1,87 @@
-# analytics_etl/transform.py
+import logging
 
-from datetime import date
-from typing import Any
+import pandas as pd
 
 
-REQUIRED_FIELDS = {
+logger = logging.getLogger(__name__)
+
+
+COLUMNS = [
+    "symbol",
     "date",
     "open",
     "high",
     "low",
     "close",
-}
+    "volume",
+    "synthetic",
+    "daily_change",
+    "daily_change_pct",
+]
 
 
-def _to_float(value: Any) -> float:
-    if value is None:
-        raise ValueError("missing numeric value")
+def transform(raw_data: dict) -> pd.DataFrame:
+    """Convert raw API responses into a validated candle DataFrame."""
+    if not isinstance(raw_data, dict):
+        raise ValueError("raw_data must be a dictionary")
 
-    return float(value)
-
-
-def _transform_candle(
-    symbol: str,
-    candle: dict[str, Any],
-) -> dict[str, Any] | None:
-
-    # ------------------------------------------------------------------
-    # Missing required fields
-    # ------------------------------------------------------------------
-
-    missing = REQUIRED_FIELDS - candle.keys()
-
-    if missing:
-        return None
-
-    try:
-        # --------------------------------------------------------------
-        # Date
-        # --------------------------------------------------------------
-
-        candle_date = date.fromisoformat(
-            str(candle["date"])
-        )
-
-        # --------------------------------------------------------------
-        # Prices
-        # --------------------------------------------------------------
-
-        open_price = _to_float(candle["open"])
-        high = _to_float(candle["high"])
-        low = _to_float(candle["low"])
-        close = _to_float(candle["close"])
-
-        # --------------------------------------------------------------
-        # Volume
-        # --------------------------------------------------------------
-
-        volume = candle.get("volume")
-
-        if volume is not None:
-            volume = int(volume)
-
-    except (ValueError, TypeError):
-        return None
-
-    # ------------------------------------------------------------------
-    # Positive price validation
-    # ------------------------------------------------------------------
-
-    if open_price <= 0:
-        return None
-
-    if high <= 0:
-        return None
-
-    if low <= 0:
-        return None
-
-    if close <= 0:
-        return None
-
-    # ------------------------------------------------------------------
-    # OHLC consistency
-    # ------------------------------------------------------------------
-
-    # A candle cannot have high below low.
-    if high < low:
-        return None
-
-    # Open must lie inside the day's trading range.
-    if not low <= open_price <= high:
-        return None
-
-    # Close must lie inside the day's trading range.
-    if not low <= close <= high:
-        return None
-
-    # ------------------------------------------------------------------
-    # Volume validation
-    # ------------------------------------------------------------------
-
-    if volume is not None and volume < 0:
-        return None
-
-    # ------------------------------------------------------------------
-    # Derived metrics
-    # ------------------------------------------------------------------
-
-    daily_change = close - open_price
-
-    daily_change_pct = (
-        (daily_change / open_price) * 100
-    )
-
-    return {
-        "symbol": symbol,
-        "date": candle_date.isoformat(),
-        "open": open_price,
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume,
-        "synthetic": bool(
-            candle.get("synthetic", False)
-        ),
-        "daily_change": daily_change,
-        "daily_change_pct": daily_change_pct,
-    }
-
-
-def transform(data):
-    """
-    Pure transformation of raw Fauxnance responses.
-
-    Input:
-        Raw API responses.
-
-    Output:
-        List of cleaned candle records.
-
-    This function:
-        - does not access the environment
-        - does not access the network
-        - does not write files
-        - does not write to a database
-    """
-
-    if not isinstance(data, dict):
-        raise ValueError("data must be a dictionary")
-
-    output = []
-
-    for symbol, response in data.items():
-
+    rows = []
+    for symbol, response in raw_data.items():
         if not isinstance(response, dict):
+            logger.warning("INVALID_PAYLOAD symbol=%s reason=response_not_object", symbol)
             continue
 
-        payload = response.get("data")
-
-        if not isinstance(payload, dict):
+        data = response.get("data", {})
+        if not isinstance(data, dict) or not isinstance(data.get("candles"), list):
+            logger.warning("INVALID_PAYLOAD symbol=%s reason=missing_candles", symbol)
             continue
 
-        response_symbol = payload.get(
-            "symbol",
-            symbol,
+        response_symbol = data.get("symbol", symbol)
+        for candle in data["candles"]:
+            if isinstance(candle, dict):
+                rows.append({"symbol": response_symbol, **candle})
+
+    if not rows:
+        return pd.DataFrame(columns=COLUMNS)
+
+    frame = pd.DataFrame(rows)
+    required = ["symbol", "date", "open", "high", "low", "close"]
+
+    for column in ["open", "high", "low", "close", "volume"]:
+        if column not in frame:
+            frame[column] = pd.NA
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+
+    frame["date"] = pd.to_datetime(
+        frame["date"], format="%Y-%m-%d", errors="coerce"
+    )
+    missing_required = frame[required].isna().any(axis=1)
+    if missing_required.any():
+        logger.warning(
+            "INVALID_CANDLES dropped=%s reason=missing_or_invalid_required_field",
+            int(missing_required.sum()),
         )
+    frame = frame[~missing_required]
 
-        candles = payload.get("candles")
+    valid_prices = (
+        (frame[["open", "high", "low", "close"]] > 0).all(axis=1)
+        & (frame["high"] >= frame["low"])
+        & frame["open"].between(frame["low"], frame["high"])
+        & frame["close"].between(frame["low"], frame["high"])
+    )
+    valid_volume = frame["volume"].isna() | (frame["volume"] >= 0)
+    invalid_rows = ~(valid_prices & valid_volume)
+    if invalid_rows.any():
+        logger.warning("INVALID_CANDLES dropped=%s", int(invalid_rows.sum()))
+    frame = frame[~invalid_rows]
 
-        if not isinstance(candles, list):
-            continue
+    frame = frame.drop_duplicates(subset=["symbol", "date"], keep="last")
+    if "synthetic" not in frame:
+        frame["synthetic"] = False
+    else:
+        frame["synthetic"] = frame["synthetic"].fillna(False).astype(bool)
+    frame["daily_change"] = frame["close"] - frame["open"]
+    frame["daily_change_pct"] = frame["daily_change"] / frame["open"] * 100
+    frame["date"] = frame["date"].dt.date
 
-        for candle in candles:
-
-            if not isinstance(candle, dict):
-                continue
-
-            transformed = _transform_candle(
-                response_symbol,
-                candle,
-            )
-
-            if transformed is not None:
-                output.append(transformed)
-
-    return output
+    return frame[COLUMNS].sort_values(["symbol", "date"]).reset_index(drop=True)

@@ -1,0 +1,20 @@
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
+.venv/
+venv/
+**/.venv/
+**/venv/
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated analytics data and raw API cache
+*.duckdb
+*.duckdb.wal
+**/.cache/
