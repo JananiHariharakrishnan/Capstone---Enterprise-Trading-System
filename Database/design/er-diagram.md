@@ -37,7 +37,6 @@ erDiagram
         VARCHAR asset_class
         CHAR currency
         BOOLEAN tradable
-        NUMERIC current_price
     }
 
     %% =========================================================

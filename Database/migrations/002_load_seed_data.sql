@@ -15,18 +15,17 @@ INSERT INTO instruments (
     name,
     asset_class,
     currency,
-    tradable,
-    current_price
+    tradable
 ) VALUES
-    ('INFY.NS',      'Infosys Limited',                       'EQUITY',  'INR', TRUE,  1585.50),
-    ('RELIANCE.NS',  'Reliance Industries Limited',           'EQUITY',  'INR', TRUE,  1425.00),
-    ('TATASTEEL.BO', 'Tata Steel Limited',                   'EQUITY',  'INR', TRUE,   164.20),
-    ('HDFCBANK.NS', 'HDFC Bank Limited',                     'EQUITY',  'INR', TRUE,  1672.00),
-    ('AAPL',        'Apple Inc',                             'EQUITY',  'USD', TRUE,   232.50),
-    ('SPY',         'SPDR S&P 500 ETF Trust',                'ETF',     'USD', TRUE,   548.00),
-    ('FX:EURUSD',   'Euro against United States Dollar',     'FX',      'USD', TRUE,     1.17),
-    ('X:BTC-USD',   'Bitcoin against United States Dollar',  'CRYPTO',  'USD', TRUE, 61000.00),
-    ('SATYAM.BO',   'Satyam Computer Services Limited',     'EQUITY',  'INR', FALSE,   21.50);
+    ('INFY.NS',      'Infosys Limited',                       'EQUITY',  'INR', TRUE),
+    ('RELIANCE.NS',  'Reliance Industries Limited',           'EQUITY',  'INR', TRUE),
+    ('TATASTEEL.BO', 'Tata Steel Limited',                   'EQUITY',  'INR', TRUE),
+    ('HDFCBANK.NS', 'HDFC Bank Limited',                     'EQUITY',  'INR', TRUE),
+    ('AAPL',        'Apple Inc',                             'EQUITY',  'USD', TRUE),
+    ('SPY',         'SPDR S&P 500 ETF Trust',                'ETF',     'USD', TRUE),
+    ('FX:EURUSD',   'Euro against United States Dollar',     'FX',      'USD', TRUE),
+    ('X:BTC-USD',   'Bitcoin against United States Dollar',  'CRYPTO',  'USD', TRUE),
+    ('SATYAM.BO',   'Satyam Computer Services Limited',     'EQUITY',  'INR', FALSE);
 
 -- -----------------------------------------------------------------------------
 -- ACCOUNTS

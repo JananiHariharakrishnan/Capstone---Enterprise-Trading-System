@@ -19,13 +19,12 @@ BEGIN;
 -- executions, positions and watchlists can still resolve the symbol.
 -- -----------------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS instruments(
-    symbol          VARCHAR(20)  NOT NULL,
+CREATE TABLE instruments(
+    symbol          VARCHAR(20) NOT NULL,
     name            VARCHAR(255) NOT NULL,
-    asset_class     VARCHAR(20)  NOT NULL,
-    currency        CHAR(3)      NOT NULL,
-    tradable        BOOLEAN      NOT NULL DEFAULT TRUE,
-    current_price   NUMERIC(18,2),
+    asset_class     VARCHAR(20) NOT NULL,
+    currency        CHAR(3) NOT NULL,
+    tradable        BOOLEAN NOT NULL DEFAULT TRUE,
 
     CONSTRAINT pk_instruments PRIMARY KEY (symbol),
 
@@ -33,10 +32,7 @@ CREATE TABLE IF NOT EXISTS instruments(
         CHECK (asset_class IN ('EQUITY', 'ETF', 'FX', 'CRYPTO', 'BOND')),
 
     CONSTRAINT ck_instruments_currency
-        CHECK (currency ~ '^[A-Z]{3}$'),
-
-    CONSTRAINT ck_instruments_current_price
-        CHECK (current_price IS NULL OR current_price > 0)
+        CHECK (currency ~ '^[A-Z]{3}$')
 );
 
 -- -----------------------------------------------------------------------------
