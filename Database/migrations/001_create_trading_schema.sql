@@ -19,7 +19,7 @@ BEGIN;
 -- executions, positions and watchlists can still resolve the symbol.
 -- -----------------------------------------------------------------------------
 
-CREATE TABLE instruments(
+CREATE TABLE IF NOT EXISTS instruments(
     symbol          VARCHAR(20) NOT NULL,
     name            VARCHAR(255) NOT NULL,
     asset_class     VARCHAR(20) NOT NULL,
