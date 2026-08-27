@@ -1,111 +1,178 @@
-'''
-Temprory code until the extract , load and transform file is done
-'''
+from pathlib import Path
 
-import pandas as pd
+import duckdb
 
-from analytics_etl.analysis import compare_securities
+from analytics_etl.analysis import (
+    compare_securities,
+    summarize_data,
+)
 from analytics_etl.charts import create_market_dashboard
 
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATABASE_PATH = Path(__file__).resolve().with_name("analytics.duckdb")
 
-def create_sample_data(symbol):
-    prices = {
-        "INFY.NS": [100, 103, 101, 106, 104, 112],
-        "RELIANCE.NS": [100, 102, 104, 103, 107, 109],
-        "TATASTEEL.BO": [100, 106, 99, 104, 97, 103],
-    }
+SYMBOLS = [
+    "INFY.NS",
+        "RELIANCE.NS",
+        "TATASTEEL.BO",
+        "ICICIBANK.NS"
+]
 
-    return pd.DataFrame(
-        {
-            "symbol": [symbol] * 6,
-            "date": pd.to_datetime(
-                [
-                    "2026-07-01",
-                    "2026-07-02",
-                    "2026-07-03",
-                    "2026-07-06",
-                    "2026-07-07",
-                    "2026-07-08",
-                ]
-            ),
-            "close": prices[symbol],
-        }
+
+def load_market_data():
+    """
+    Load non-synthetic market candle data from DuckDB
+    and restrict all securities to their common date range.
+    """
+
+    if not DATABASE_PATH.exists():
+        raise FileNotFoundError(
+            f"DuckDB database not found: {DATABASE_PATH}\n"
+            "Run the ETL pipeline first."
+        )
+
+    connection = duckdb.connect(
+        str(DATABASE_PATH),
+        read_only=True,
     )
 
+    try:
+        placeholders = ", ".join("?" for _ in SYMBOLS)
+
+        query = f"""
+            SELECT
+                symbol,
+                date,
+                "close"
+            FROM main.market_candles
+            WHERE symbol IN ({placeholders})
+              AND synthetic = FALSE
+            ORDER BY symbol, date
+        """
+
+        df = connection.execute(
+            query,
+            SYMBOLS,
+        ).df()
+
+    finally:
+        connection.close()
+
+    if df.empty:
+        raise ValueError(
+            "No non-synthetic market data found for the requested symbols."
+        )
+
+    # Make sure every requested symbol exists.
+    for symbol in SYMBOLS:
+        if df[df["symbol"] == symbol].empty:
+            raise ValueError(
+                f"No non-synthetic data found for {symbol}."
+            )
+
+    # ---------------------------------------------------------
+    # Determine common date range
+    # ---------------------------------------------------------
+
+    date_ranges = (
+        df.groupby("symbol")["date"]
+        .agg(["min", "max"])
+    )
+
+    common_start = date_ranges["min"].max()
+    common_end = date_ranges["max"].min()
+
+    if common_start > common_end:
+        raise ValueError(
+            "The requested securities have no overlapping date range."
+        )
+
+    print("\nCommon analysis period:")
+    print(f"  {common_start} → {common_end}")
+
+    # ---------------------------------------------------------
+    # Restrict all securities to common period
+    # ---------------------------------------------------------
+
+    df = df[
+        (df["date"] >= common_start)
+        & (df["date"] <= common_end)
+    ].copy()
+
+    data = {}
+
+    for symbol in SYMBOLS:
+        symbol_df = (
+            df[df["symbol"] == symbol]
+            .sort_values("date")
+            .copy()
+        )
+
+        if symbol_df.empty:
+            raise ValueError(
+                f"No data remains for {symbol} "
+                "after applying the common date range."
+            )
+
+        data[symbol] = symbol_df
+
+    return data
 
 def main():
-    # Temporary sample data.
-    # This will later be replaced by the real ETL output.
+    print("=== ANALYSIS START ===")
 
-    infy_df = create_sample_data("INFY.NS")
-    reliance_df = create_sample_data("RELIANCE.NS")
-    tata_df = create_sample_data("TATASTEEL.BO")
+    print("\nDatabase:")
+    print(DATABASE_PATH)
 
-    data = {
-        "INFY.NS": infy_df,
-        "RELIANCE.NS": reliance_df,
-        "TATASTEEL.BO": tata_df,
-    }
+    print("\nSymbols:")
+    for symbol in SYMBOLS:
+        print(f"  - {symbol}")
 
-    # Calculate the three metrics.
+    # ---------------------------------------------------------
+    # Load real ETL output from DuckDB
+    # ---------------------------------------------------------
+
+    data = load_market_data()
+
+    # ---------------------------------------------------------
+    # Calculate financial metrics
+    # ---------------------------------------------------------
+
     metrics = compare_securities(data)
 
-    print("\nAnalysis results:")
+    print("\n=== ANALYSIS RESULTS ===")
     print(metrics.to_string(index=False))
 
-    # Create charts.
+    # ---------------------------------------------------------
+    # Calculate supporting dataset statistics
+    # ---------------------------------------------------------
+
+    summary = summarize_data(data)
+
+    print("\n=== DATASET SUMMARY ===")
+    print(summary.to_string(index=False))
+
+    # ---------------------------------------------------------
+    # Generate HTML dashboard
+    # ---------------------------------------------------------
+
+    output_path = (
+        PROJECT_ROOT
+        / "artefacts"
+        / "market_dashboard.html"
+    )
+
     create_market_dashboard(
-    metrics,
-    "artefacts/market_dashboard.html",
-)
+        metrics,
+        str(output_path),
+    )
 
+    print("\nDashboard created:")
+    print(output_path)
 
-
-    print("\nCharts created in artefacts/")
+    print("\n=== ANALYSIS COMPLETE ===")
 
 
 if __name__ == "__main__":
     main()
-
-'''
-Permanent code
-from analytics_etl.analysis import compare_securities
-from analytics_etl.charts import (
-    create_performance_chart,
-    create_volatility_chart,
-    create_drawdown_chart,
-)
-
-# These will eventually come from your ETL pipeline.
-infy_df = ...
-reliance_df = ...
-tata_df = ...
-
-data = {
-    "INFY.NS": infy_df,
-    "RELIANCE.NS": reliance_df,
-    "TATASTEEL.BO": tata_df,
-}
-
-metrics = compare_securities(data)
-
-print(metrics.to_string(index=False))
-
-create_performance_chart(
-    metrics,
-    "artefacts/performance.html",
-)
-
-create_volatility_chart(
-    metrics,
-    "artefacts/volatility.html",
-)
-
-create_drawdown_chart(
-    metrics,
-    "artefacts/drawdown.html",
-)
-
-'''
-

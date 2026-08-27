@@ -12,7 +12,12 @@ logger = logging.getLogger(__name__)
 
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 CACHE_DIR = Path(__file__).resolve().parents[1] / ".cache"
-DEFAULT_SYMBOLS = ("INFY.NS", "RELIANCE.NS", "TATASTEEL.BO")
+DEFAULT_SYMBOLS = (
+    "INFY.NS",
+    "RELIANCE.NS",
+    "TATASTEEL.BO",
+    "ICICIBANK.NS",
+)
 MAX_RETRIES = 3
 BACKOFF_SECONDS = 1
 

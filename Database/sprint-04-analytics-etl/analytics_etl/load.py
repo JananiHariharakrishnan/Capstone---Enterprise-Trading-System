@@ -19,9 +19,7 @@ COLUMNS = [
 ]
 
 INSTRUMENT_NAMES = {
-    "INFY.NS": "Infosys",
-    "RELIANCE.NS": "Reliance Industries",
-    "TATASTEEL.BO": "Tata Steel",
+
 }
 
 
@@ -135,9 +133,7 @@ def _load_dimensions(connection: duckdb.DuckDBPyConnection, data: pd.DataFrame) 
             "symbol": data["symbol"].drop_duplicates().tolist(),
         }
     )
-    instruments["name"] = instruments["symbol"].map(
-        lambda symbol: INSTRUMENT_NAMES.get(symbol, symbol)
-    )
+    instruments["name"] = instruments["symbol"]
     instruments["asset_class"] = "EQUITY"
     instruments["currency"] = "INR"
     instruments["exchange"] = instruments["symbol"].map(_exchange_for_symbol)
