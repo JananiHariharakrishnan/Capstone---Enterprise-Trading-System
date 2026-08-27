@@ -121,6 +121,7 @@ def extract(
         cache_file = _cache_path(symbol, start_date, end_date)
 
         if cache_file.exists():
+            print(f"CACHE HIT: {symbol}")
             logger.info("CACHE_HIT symbol=%s", symbol)
             with cache_file.open("r", encoding="utf-8") as file:
                 results[symbol] = json.load(file)
@@ -129,6 +130,7 @@ def extract(
         if api_key is None:
             api_key = _get_api_key()
 
+        print(f"API FETCH: {symbol}")
         logger.info("FETCH symbol=%s start=%s end=%s", symbol, start_date, end_date)
         try:
             raw_response = _request(symbol, start_date, end_date, api_key)
