@@ -6,7 +6,9 @@ from unittest.mock import Mock, patch
 import pytest
 
 from analytics_etl.extract import (
+    PayloadError,
     RateLimitError,
+    ServerError,
     SymbolRequestError,
     _request,
 )
@@ -90,3 +92,40 @@ def test_extract_skips_a_4xx_symbol_and_continues(tmp_path: Path):
         )
 
     assert result == {"INFY.NS": good}
+
+
+def test_invalid_json_response_is_classified():
+    response = Mock(status_code=200)
+    response.json.side_effect = ValueError("not json")
+
+    with patch("analytics_etl.extract.requests.get", return_value=response):
+        with pytest.raises(PayloadError):
+            _request("INFY.NS", "2026-08-01", "2026-08-26", "fake-test-key")
+
+
+def test_server_error_after_retries_is_classified():
+    response = Mock(status_code=503)
+
+    with patch("analytics_etl.extract.requests.get", return_value=response), patch(
+        "analytics_etl.extract.time.sleep"
+    ):
+        with pytest.raises(ServerError):
+            _request("INFY.NS", "2026-08-01", "2026-08-26", "fake-test-key")
+
+
+def test_corrupt_cache_is_ignored_and_replaced(tmp_path: Path):
+    cache_file = tmp_path / "INFY.NS_2026-08-01_2026-08-26.json"
+    cache_file.write_text("not json", encoding="utf-8")
+    good = {"data": {"symbol": "INFY.NS", "candles": []}}
+
+    with patch("analytics_etl.extract.CACHE_DIR", tmp_path), patch(
+        "analytics_etl.extract._get_api_key", return_value="fake-test-key"
+    ), patch("analytics_etl.extract._request", return_value=good):
+        result = __import__("analytics_etl.extract", fromlist=["extract"]).extract(
+            symbols=["INFY.NS"],
+            start_date="2026-08-01",
+            end_date="2026-08-26",
+        )
+
+    assert result == {"INFY.NS": good}
+    assert cache_file.read_text(encoding="utf-8").startswith("{")

@@ -18,12 +18,6 @@ BACKOFF_SECONDS = 1
 
 load_dotenv(ENV_FILE)
 
-BASE_URL = os.getenv("FAUXNANCE_BASE_URL")
-if not BASE_URL:
-    raise RuntimeError(f"FAUXNANCE_BASE_URL is not set in {ENV_FILE}")
-BASE_URL = BASE_URL.rstrip("/")
-
-
 class RateLimitError(RuntimeError):
     """Raised when the API daily quota has been reached."""
 
@@ -32,11 +26,30 @@ class SymbolRequestError(RuntimeError):
     """Raised when the API rejects one symbol request."""
 
 
+class NetworkError(RuntimeError):
+    """Raised when a request cannot reach the API after retries."""
+
+
+class PayloadError(RuntimeError):
+    """Raised when the API response is not valid JSON."""
+
+
+class ServerError(RuntimeError):
+    """Raised when the API remains unavailable after server-error retries."""
+
+
 def _get_api_key() -> str:
     api_key = os.getenv("FAUXNANCE_API_KEY")
     if not api_key:
         raise RuntimeError(f"FAUXNANCE_API_KEY is not set in {ENV_FILE}")
     return api_key
+
+
+def _get_base_url() -> str:
+    base_url = os.getenv("FAUXNANCE_BASE_URL")
+    if not base_url:
+        raise RuntimeError(f"FAUXNANCE_BASE_URL is not set in {ENV_FILE}")
+    return base_url.rstrip("/")
 
 
 def _cache_path(symbol: str, start_date: str, end_date: str) -> Path:
@@ -51,10 +64,11 @@ def _request(
     api_key: str,
 ) -> dict:
     """Fetch one raw candle response, retrying temporary failures."""
+    base_url = _get_base_url()
     for attempt in range(MAX_RETRIES):
         try:
             response = requests.get(
-                f"{BASE_URL}/candles/{symbol}",
+                f"{base_url}/candles/{symbol}",
                 params={"start": start_date, "end": end_date},
                 headers={"X-Api-Key": api_key},
                 timeout=10,
@@ -62,7 +76,9 @@ def _request(
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
             if attempt == MAX_RETRIES - 1:
                 logger.error("NETWORK_ERROR symbol=%s attempts=%s", symbol, MAX_RETRIES)
-                raise
+                raise NetworkError(
+                    f"Could not reach Fauxnance for {symbol} after {MAX_RETRIES} attempts"
+                ) from exc
 
             delay = BACKOFF_SECONDS * (2**attempt)
             logger.warning("NETWORK_ERROR symbol=%s retry=%s delay=%s", symbol, attempt + 1, delay)
@@ -93,7 +109,15 @@ def _request(
 
         if response.status_code >= 500:
             if attempt == MAX_RETRIES - 1:
-                response.raise_for_status()
+                logger.error(
+                    "SERVER_ERROR symbol=%s status=%s attempts=%s",
+                    symbol,
+                    response.status_code,
+                    MAX_RETRIES,
+                )
+                raise ServerError(
+                    f"Fauxnance server error for {symbol}: HTTP {response.status_code}"
+                )
 
             delay = BACKOFF_SECONDS * (2**attempt)
             logger.warning("SERVER_ERROR symbol=%s retry=%s delay=%s", symbol, attempt + 1, delay)
@@ -101,7 +125,11 @@ def _request(
             continue
 
         response.raise_for_status()
-        return response.json()
+        try:
+            return response.json()
+        except ValueError as exc:
+            logger.error("PAYLOAD_ERROR symbol=%s reason=invalid_json", symbol)
+            raise PayloadError(f"Invalid JSON response for {symbol}") from exc
 
     raise RuntimeError(f"Request failed for {symbol}")
 
@@ -121,11 +149,15 @@ def extract(
         cache_file = _cache_path(symbol, start_date, end_date)
 
         if cache_file.exists():
-            print(f"CACHE HIT: {symbol}")
-            logger.info("CACHE_HIT symbol=%s", symbol)
-            with cache_file.open("r", encoding="utf-8") as file:
-                results[symbol] = json.load(file)
-            continue
+            try:
+                with cache_file.open("r", encoding="utf-8") as file:
+                    results[symbol] = json.load(file)
+            except (OSError, json.JSONDecodeError) as exc:
+                logger.warning("CACHE_INVALID symbol=%s reason=%s", symbol, exc)
+            else:
+                print(f"CACHE HIT: {symbol}")
+                logger.info("CACHE_HIT symbol=%s", symbol)
+                continue
 
         if api_key is None:
             api_key = _get_api_key()
@@ -136,12 +168,15 @@ def extract(
             raw_response = _request(symbol, start_date, end_date, api_key)
         except RateLimitError:
             raise
-        except SymbolRequestError as exc:
+        except (SymbolRequestError, NetworkError, PayloadError, ServerError) as exc:
             logger.error("SYMBOL_FAILED symbol=%s reason=%s", symbol, exc)
             continue
 
-        with cache_file.open("w", encoding="utf-8") as file:
-            json.dump(raw_response, file, indent=2)
+        try:
+            with cache_file.open("w", encoding="utf-8") as file:
+                json.dump(raw_response, file, indent=2)
+        except (OSError, TypeError, ValueError) as exc:
+            logger.warning("CACHE_WRITE_FAILED symbol=%s reason=%s", symbol, exc)
         results[symbol] = raw_response
 
     return results
