@@ -21,16 +21,18 @@ def calculate_volatility(df: pd.DataFrame) -> float:
     """
     Calculate daily-return volatility as a percentage.
 
-    Volatility is the standard deviation of daily percentage returns.
+    Daily return is based on consecutive closing prices:
+
+        (current close / previous close) - 1
+
+    Volatility is the standard deviation of daily returns.
     """
 
     data = df.sort_values("date").copy()
 
     data["daily_return"] = data["close"].pct_change()
 
-    volatility = data["daily_return"].std()
-
-    return volatility * 100
+    return data["daily_return"].std() * 100
 
 
 def calculate_max_drawdown(df: pd.DataFrame) -> float:
@@ -49,8 +51,20 @@ def calculate_max_drawdown(df: pd.DataFrame) -> float:
 
 def calculate_metrics(df: pd.DataFrame) -> dict:
     """
-    Calculate all three metrics for one security.
+    Calculate all three headline metrics for one security.
     """
+
+    if df.empty:
+        raise ValueError("Cannot calculate metrics for an empty DataFrame.")
+
+    required_columns = {"symbol", "date", "close"}
+
+    missing = required_columns - set(df.columns)
+
+    if missing:
+        raise ValueError(
+            f"Missing required columns: {sorted(missing)}"
+        )
 
     return {
         "symbol": df["symbol"].iloc[0],
@@ -62,32 +76,41 @@ def calculate_metrics(df: pd.DataFrame) -> dict:
 
 def compare_securities(data: dict[str, pd.DataFrame]) -> pd.DataFrame:
     """
-    Calculate metrics for multiple securities.
-
-    Parameters
-    ----------
-    data:
-        Dictionary where the key is the security symbol and the value
-        is its cleaned candle DataFrame.
-
-    Example:
-        {
-            "INFY.NS": infy_df,
-            "RELIANCE.NS": reliance_df,
-            "TATASTEEL.BO": tata_steel_df
-        }
-
-    Returns
-    -------
-    pandas.DataFrame
-        One row per security with return, volatility and drawdown.
+    Calculate headline metrics for multiple securities.
     """
 
     results = []
 
     for symbol, df in data.items():
+        if df.empty:
+            raise ValueError(f"No data available for {symbol}.")
+
         metrics = calculate_metrics(df)
         metrics["symbol"] = symbol
         results.append(metrics)
+
+    return pd.DataFrame(results)
+
+
+def summarize_data(data: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """
+    Produce supporting dataset coverage statistics.
+    """
+
+    results = []
+
+    for symbol, df in data.items():
+        data_sorted = df.sort_values("date").copy()
+
+        results.append(
+            {
+                "symbol": symbol,
+                "observations": len(data_sorted),
+                "start_date": data_sorted["date"].min(),
+                "end_date": data_sorted["date"].max(),
+                "min_close": data_sorted["close"].min(),
+                "max_close": data_sorted["close"].max(),
+            }
+        )
 
     return pd.DataFrame(results)
