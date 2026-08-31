@@ -1,16 +1,15 @@
 import os
+from pathlib import Path
+
 import requests
 from dotenv import load_dotenv
-from pathlib import Path
+
+from ..errors import ClientError
 
 
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 
 load_dotenv(ENV_PATH)
-
-
-class ClientError(RuntimeError):
-    """Raised when a Fauxnance request cannot be completed."""
 
 
 def _get_base_url():

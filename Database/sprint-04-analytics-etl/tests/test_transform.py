@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from analytics_etl.transform import transform
+from analytics_etl.pipeline.transform import transform
 
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"

@@ -1,6 +1,6 @@
-from .extract import extract
-from .transform import transform
-from .load import load
+from .pipeline.extract import extract
+from .pipeline.transform import transform
+from .pipeline.load import load
 
 
 def run():

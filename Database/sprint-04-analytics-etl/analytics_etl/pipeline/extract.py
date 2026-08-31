@@ -7,11 +7,13 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
+from ..errors import NetworkError, PayloadError, RateLimitError, ServerError, SymbolRequestError
+
 
 logger = logging.getLogger(__name__)
 
-ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
-CACHE_DIR = Path(__file__).resolve().parents[1] / ".cache"
+ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+CACHE_DIR = Path(__file__).resolve().parents[2] / ".cache"
 DEFAULT_SYMBOLS = (
     "INFY.NS",
     "RELIANCE.NS",
@@ -22,25 +24,6 @@ MAX_RETRIES = 3
 BACKOFF_SECONDS = 1
 
 load_dotenv(ENV_FILE)
-
-class RateLimitError(RuntimeError):
-    """Raised when the API daily quota has been reached."""
-
-
-class SymbolRequestError(RuntimeError):
-    """Raised when the API rejects one symbol request."""
-
-
-class NetworkError(RuntimeError):
-    """Raised when a request cannot reach the API after retries."""
-
-
-class PayloadError(RuntimeError):
-    """Raised when the API response is not valid JSON."""
-
-
-class ServerError(RuntimeError):
-    """Raised when the API remains unavailable after server-error retries."""
 
 
 def _get_api_key() -> str:
@@ -78,7 +61,10 @@ def _request(
                 headers={"X-Api-Key": api_key},
                 timeout=10,
             )
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+        ) as exc:
             if attempt == MAX_RETRIES - 1:
                 logger.error("NETWORK_ERROR symbol=%s attempts=%s", symbol, MAX_RETRIES)
                 raise NetworkError(

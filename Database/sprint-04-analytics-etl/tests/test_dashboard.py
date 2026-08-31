@@ -1,7 +1,7 @@
 import pandas as pd
 
-from analytics_etl.charts import create_dashboard_from_database
-from analytics_etl.load import load
+from analytics_etl.analysis.charts import create_dashboard_from_database
+from analytics_etl.pipeline.load import load
 
 
 def test_dashboard_reads_metrics_from_duckdb(tmp_path):
@@ -37,3 +37,37 @@ def test_dashboard_reads_metrics_from_duckdb(tmp_path):
     html = dashboard.read_text(encoding="utf-8")
     assert "KEY INSIGHTS" in html
     assert "Strongest performance" in html
+
+
+def test_dashboard_excludes_synthetic_rows_and_names_icici_bank(tmp_path):
+    data = pd.DataFrame(
+        {
+            "symbol": [
+                "INFY.NS", "INFY.NS", "INFY.NS", "INFY.NS",
+                "ICICIBANK.NS", "ICICIBANK.NS", "ICICIBANK.NS",
+            ],
+            "date": pd.to_datetime(
+                [
+                    "2026-07-01", "2026-07-02", "2026-07-03", "2026-07-04",
+                    "2026-07-01", "2026-07-02", "2026-07-03",
+                ]
+            ).date,
+            "open": [100.0, 101.0, 102.0, 10000.0, 200.0, 202.0, 204.0],
+            "high": [101.0, 102.0, 103.0, 10001.0, 201.0, 203.0, 205.0],
+            "low": [99.0, 100.0, 101.0, 9999.0, 199.0, 201.0, 203.0],
+            "close": [100.0, 101.0, 102.0, 10000.0, 200.0, 202.0, 204.0],
+            "volume": [1000, 1000, 1000, 1000, 2000, 2000, 2000],
+            "synthetic": [False, False, False, True, False, False, False],
+            "daily_change": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "daily_change_pct": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        }
+    )
+    database = tmp_path / "analytics.duckdb"
+    dashboard = tmp_path / "dashboard.html"
+
+    load(data, database)
+    create_dashboard_from_database(database, str(dashboard))
+
+    html = dashboard.read_text(encoding="utf-8")
+    assert "10000.00%" not in html
+    assert "ICICI Bank" in html

@@ -78,7 +78,7 @@ def test_compare_securities(sample_data):
     }
     
 def test_create_market_dashboard(tmp_path, sample_data):
-    from analytics_etl.charts import create_market_dashboard
+    from analytics_etl.analysis.charts import create_market_dashboard
 
     metrics = compare_securities(
         {
